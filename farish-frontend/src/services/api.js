@@ -1,6 +1,5 @@
 // src/services/api.js
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://farish-hrx1.onrender.com';
-const getHeaders = (isMultipart = false) => {
+const BASE_URL = `${process.env.REACT_APP_API_URL || 'https://farish-hrx1.onrender.com'}/api`;const getHeaders = (isMultipart = false) => {
   const token = localStorage.getItem('access_token');
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
