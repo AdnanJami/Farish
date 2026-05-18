@@ -94,7 +94,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://farish-hrx1.onrender.com",  # add this
 ]
 CORS_ALLOW_CREDENTIALS = True
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://farish-hrx1.onrender.com',
+]
 # Media
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
