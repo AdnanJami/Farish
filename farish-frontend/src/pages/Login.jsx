@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import FarishWordmark from '../components/FarishWordmark';
 import '../styles/Login.css';
 
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://farish-hrx1.onrender.com/api';
 
 export default function Login() {
   const { login } = useAuth();

@@ -91,11 +91,13 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://farish-hrx1.onrender.com",  # add this
+    "https://farish-hrx1.onrender.com", 
+    "https://farish-sepia.vercel.app",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     'https://farish-hrx1.onrender.com',
+    'https://farish-sepia.vercel.app',
 ]
 # Media
 MEDIA_URL = '/media/'
