@@ -1,0 +1,76 @@
+/* src/styles/Navbar.css */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--navbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  background: rgba(209, 234, 235, 0.88);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.navbar__right { display: flex; align-items: center; gap: 20px; }
+
+.navbar__link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+.navbar__link:hover { color: var(--gold); }
+
+.navbar__btn {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 20px;
+  border: 1px solid var(--gold);
+  color: var(--charcoal);
+  background: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s;
+  border-radius: var(--radius);
+}
+.navbar__btn:hover {
+  background: var(--gold);
+  color: var(--white);
+  border-color: var(--gold);
+}
+.navbar__greeting {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .navbar {
+    padding: 0 14px;
+    gap: 8px;
+  }
+  .navbar__right {
+    gap: 10px;
+  }
+  .navbar__greeting {
+    display: none;
+  }
+  .navbar__btn {
+    padding: 8px 12px;
+    font-size: 0.68rem;
+  }
+  .navbar__wordmark.farish-wordmark--md {
+    font-size: 0.82rem;
+    letter-spacing: 0.1em;
+  }
+}

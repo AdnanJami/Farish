@@ -1,0 +1,93 @@
+/* src/styles/global.css */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap');
+
+:root {
+  /* Farish brand */
+  --farish-bg: #d1eaeb;
+  --farish-bg-elevated: rgba(255, 255, 255, 0.72);
+  --farish-bg-card: #ffffff;
+  --tulip-red: #e53935;
+  --tulip-green: #6b8e23;
+
+  /* Mapped tokens (used across existing stylesheets) */
+  --cream: #bfe0e3;
+  --ivory: #d1eaeb;
+  --charcoal: #2a2218;
+  --warm-black: #1a1714;
+  --gold: #c18c3e;
+  --gold-light: #d4a85c;
+  --muted: #4a5f60;
+  --border: #a8c9cc;
+  --white: #ffffff;
+  --green: #25d366;
+  --error: #c0392b;
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+
+  --radius: 2px;
+  --radius-lg: 6px;
+  --shadow: 0 2px 24px rgba(26, 55, 56, 0.08);
+  --shadow-hover: 0 12px 40px rgba(26, 55, 56, 0.14);
+
+  --navbar-h: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--ivory);
+  color: var(--charcoal);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+input, textarea, select {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  width: 100%;
+  background: var(--white);
+  color: var(--charcoal);
+  transition: border-color 0.2s;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+textarea { resize: vertical; }
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,85 @@
+/* src/styles/Login.css */
+.login {
+  min-height: calc(100vh - var(--navbar-h));
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ivory);
+  padding: 40px 20px;
+}
+.login__box {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 48px 40px;
+  width: 100%; max-width: 400px;
+  box-shadow: var(--shadow);
+}
+.login__brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+.login__title {
+  font-family: var(--font-display);
+  font-size: 1.8rem; font-weight: 300;
+  color: var(--warm-black);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.login__sub {
+  font-size: 0.85rem; color: var(--muted);
+  text-align: center; margin-bottom: 32px;
+}
+.login__error {
+  background: #fdf0f0; color: var(--error);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+.login__form { display: flex; flex-direction: column; gap: 20px; }
+.login__form button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  background: var(--gold); color: white;
+  font-size: 0.85rem; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  border-radius: var(--radius);
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+.login__form button[type="submit"]:hover:not(:disabled) { background: var(--warm-black); }
+.login__form button[type="submit"]:disabled { opacity: 0.5; cursor: not-allowed; }
+.login__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.login__tabs button {
+  flex: 1;
+  padding: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.login__tabs button.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.login__success {
+  background: #f0fdf4;
+  color: #16a34a;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 480px) {
+  .login__box {
+    padding: 32px 20px;
+  }
+}
