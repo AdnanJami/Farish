@@ -5,52 +5,39 @@
 }
 
 .farish-wordmark__logo {
-  object-fit: contain;
-  height: 25rem;          /* taller to zoom in */
-  width: 55rem;            /* wide enough to show the text */
-  object-fit: none;        /* don't scale down */
-  object-position: center; /* center on the text */
+  height: 1.4em;
+  width: auto;        /* keeps 484:149 ratio, never crops */
+  display: block;
 }
 
 .farish-wordmark__flower {
   height: 1.2em;
   width: auto;
   margin-right: 0.1rem;
+  display: block;
 }
 
-.farish-wordmark--md .farish-wordmark__logo {
-  height: 30rem;
-}
+/* Size variants */
+.farish-wordmark--sm .farish-wordmark__logo  { height: 1rem; }
+.farish-wordmark--sm .farish-wordmark__flower { height: 1.1rem; }
 
-.farish-wordmark--md .farish-wordmark__flower {
-  height: 3.5rem;
-}
+.farish-wordmark--md .farish-wordmark__logo  { height: 1.4em; }
+.farish-wordmark--md .farish-wordmark__flower { height: 1.5em; }
 
-.farish-wordmark--lg .farish-wordmark__logo {
-  height: 35rem;
-}
+.farish-wordmark--lg .farish-wordmark__logo  { height: 1.8em; }
+.farish-wordmark--lg .farish-wordmark__flower { height: 2em; }
 
-.farish-wordmark--lg .farish-wordmark__flower {
-  height: 1.6rem;
-}
+.farish-wordmark--sidebar .farish-wordmark__logo  { height: 1.2rem; }
+.farish-wordmark--sidebar .farish-wordmark__flower { height: 1.3rem; }
 
 .farish-wordmark--hero {
-  font-size: clamp(2.25rem, 7vw, 3.75rem);
   justify-content: center;
 }
+.farish-wordmark--hero .farish-wordmark__logo  { height: clamp(1.5rem, 5vw, 2.5rem); }
+.farish-wordmark--hero .farish-wordmark__flower { height: clamp(1.7rem, 5.5vw, 2.8rem); }
 
-.farish-wordmark--hero .farish-wordmark__logo {
-  height: clamp(2.25rem, 7vw, 3.75rem);
-}
+/* Navbar: hide text logo, show flower only */
+.navbar .farish-wordmark__logo   { display: none; }
 
-.farish-wordmark--hero .farish-wordmark__flower {
-  height: clamp(2.7rem, 8.4vw, 4.5rem);
-}
-
-/* Hide word-logo in navbar, show only flower icon */
-.navbar .farish-wordmark__logo {
-  display: none;
-}
-.home .farish-wordmark__flower {
-  display: none;
-}
+/* Home hero: hide flower, show text logo only */
+.home .farish-wordmark__flower   { display: none; }
