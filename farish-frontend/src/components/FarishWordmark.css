@@ -1,64 +1,56 @@
 .farish-wordmark {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.04em;
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  color: var(--gold);
-  line-height: 1;
-  text-transform: uppercase;
 }
 
-.farish-wordmark__letter {
-  display: inline-block;
-  transform: translateY(0.02em);
+.farish-wordmark__logo {
+  object-fit: contain;
+  height: 25rem;          /* taller to zoom in */
+  width: 55rem;            /* wide enough to show the text */
+  object-fit: none;        /* don't scale down */
+  object-position: center; /* center on the text */
 }
 
-.farish-wordmark__tulip {
-  width: 0.38em;
-  height: 1.05em;
-  flex-shrink: 0;
-  margin: 0 0.02em 0.04em;
-  align-self: flex-end;
+.farish-wordmark__flower {
+  height: 1.2em;
+  width: auto;
+  margin-right: 0.1rem;
 }
 
-.farish-wordmark--md {
-  font-size: 1.15rem;
-}
-.farish-wordmark--md .farish-wordmark__tulip {
-  width: 0.44em;
-  height: 1.1em;
+.farish-wordmark--md .farish-wordmark__logo {
+  height: 30rem;
 }
 
-.farish-wordmark--lg {
-  font-size: 1.35rem;
+.farish-wordmark--md .farish-wordmark__flower {
+  height: 3.5rem;
 }
-.farish-wordmark--lg .farish-wordmark__tulip {
-  width: 0.46em;
-  height: 1.12em;
+
+.farish-wordmark--lg .farish-wordmark__logo {
+  height: 35rem;
+}
+
+.farish-wordmark--lg .farish-wordmark__flower {
+  height: 1.6rem;
 }
 
 .farish-wordmark--hero {
   font-size: clamp(2.25rem, 7vw, 3.75rem);
-  letter-spacing: 0.22em;
   justify-content: center;
 }
-.farish-wordmark--hero .farish-wordmark__tulip {
-  width: 0.42em;
-  height: 1.08em;
-  margin-bottom: 0.06em;
+
+.farish-wordmark--hero .farish-wordmark__logo {
+  height: clamp(2.25rem, 7vw, 3.75rem);
 }
 
-.farish-wordmark--sidebar {
-  font-size: 1.05rem;
-  letter-spacing: 0.14em;
-  color: var(--gold);
+.farish-wordmark--hero .farish-wordmark__flower {
+  height: clamp(2.7rem, 8.4vw, 4.5rem);
 }
 
-@media (max-width: 520px) {
-  .farish-wordmark--hero {
-    font-size: clamp(1.55rem, 8.5vw, 2.5rem);
-    letter-spacing: 0.12em;
-  }
+/* Hide word-logo in navbar, show only flower icon */
+.navbar .farish-wordmark__logo {
+  display: none;
+}
+.home .farish-wordmark__flower {
+  display: none;
 }

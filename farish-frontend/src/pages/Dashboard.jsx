@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getMyPosts, createPost, updatePost, deletePost,
   uploadMedia, deleteMedia, getCategories,
@@ -36,10 +37,7 @@ function formatMoney(amount) {
 
 function parseSizingRows(data) {
   if (Array.isArray(data) && data.length > 0) {
-    return data.map((r) => ({
-      label: r.label || '',
-      value: r.value || '',
-    }));
+    return data.map((r) => ({ label: r.label || '', value: r.value || '' }));
   }
   if (typeof data === 'string' && data.trim()) {
     return [{ label: 'Notes', value: data.trim() }];
@@ -66,13 +64,9 @@ function buildCategoryPayload(categoryName, categories) {
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const [activeTab, setActiveTab] = useState('collection');
-  const [posts, setPosts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState([]);
-  const [productChoices, setProductChoices] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [customerResults, setCustomerResults] = useState([]);
@@ -93,31 +87,68 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
-    if (user.role !== 'admin') { navigate('/', { replace: true }); return; }
-    loadData();
+    if (user.role !== 'admin') { navigate('/', { replace: true }); }
   }, [user, navigate]);
 
-  useEffect(() => {
-    if (!user || activeTab !== 'orders') return;
-    const loadOrders = async () => {
-      setOrdersLoading(true);
-      try {
-        const [ordersData, productsData] = await Promise.all([
-          getOrders(),
-          getOrderProductChoices(),
-        ]);
-        setOrders(Array.isArray(ordersData) ? ordersData : ordersData.results || []);
-        setProductChoices(Array.isArray(productsData) ? productsData : []);
-      } catch (e) {
-        console.error(e);
-        setOrders([]);
-        setProductChoices([]);
-      } finally {
-        setOrdersLoading(false);
-      }
-    };
-    loadOrders();
-  }, [user, activeTab]);
+  // ── Queries ──────────────────────────────────────────────
+
+  const { data: posts = [], isLoading: loading } = useQuery({
+    queryKey: ['myPosts'],
+    queryFn: async () => {
+      const data = await getMyPosts();
+      return Array.isArray(data) ? data : data.results || [];
+    },
+    enabled: !!user && user.role === 'admin',
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const data = await getCategories();
+      return Array.isArray(data) ? data : data.results || [];
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ['orders'],
+    queryFn: async () => {
+      const data = await getOrders();
+      return Array.isArray(data) ? data : data.results || [];
+    },
+    enabled: !!user && activeTab === 'orders', // only fetch when on orders tab
+    staleTime: 1000 * 60 * 1,
+  });
+
+  const { data: productChoices = [] } = useQuery({
+    queryKey: ['productChoices'],
+    queryFn: async () => {
+      const data = await getOrderProductChoices();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!user && activeTab === 'orders',
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // ── Mutations ─────────────────────────────────────────────
+
+  const deletePostMutation = useMutation({
+    mutationFn: deletePost,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myPosts'] }),
+  });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: deleteOrder,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orders'] }),
+  });
+
+  const toggleAvailableMutation = useMutation({
+    mutationFn: ({ id, is_available }) => updatePost(id, { is_available }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myPosts'] }),
+  });
+
+  // ── Customer search (live, no cache) ──────────────────────
 
   useEffect(() => {
     if (!showOrderForm || selectedCustomer) {
@@ -125,10 +156,7 @@ export default function Dashboard() {
       return undefined;
     }
     const q = customerSearchQuery.trim();
-    if (q.length < 2) {
-      setCustomerResults([]);
-      return undefined;
-    }
+    if (q.length < 2) { setCustomerResults([]); return undefined; }
     const timer = setTimeout(async () => {
       setCustomerSearchLoading(true);
       try {
@@ -143,15 +171,7 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [customerSearchQuery, showOrderForm, selectedCustomer]);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [postsData, catsData] = await Promise.all([getMyPosts(), getCategories()]);
-      setPosts(Array.isArray(postsData) ? postsData : postsData.results || []);
-      setCategories(Array.isArray(catsData) ? catsData : catsData.results || []);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  };
+  // ── File helpers (unchanged) ───────────────────────────────
 
   const clearPendingFiles = () => {
     setPendingPreviews((prev) => {
@@ -180,6 +200,8 @@ export default function Dashboard() {
     });
   };
 
+  // ── Post form handlers ────────────────────────────────────
+
   const openNew = () => {
     setEditingPost(null);
     setForm(EMPTY_FORM);
@@ -203,10 +225,7 @@ export default function Dashboard() {
   };
 
   const handleSave = async () => {
-    if (!form.title) {
-      setError('Title is required.');
-      return;
-    }
+    if (!form.title) { setError('Title is required.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -217,27 +236,22 @@ export default function Dashboard() {
         is_available: form.is_available,
         ...buildCategoryPayload(form.categoryName, categories),
       };
-
       let saved;
       if (editingPost) {
         saved = await updatePost(editingPost.id, payload);
       } else {
         saved = await createPost(payload);
       }
-
       if (pendingFiles.length > 0) {
         const images = pendingFiles.filter((f) => f.type.startsWith('image/'));
         const videos = pendingFiles.filter((f) => f.type.startsWith('video/'));
         const hasExistingImages = editingPost?.media?.some((m) => m.media_type === 'image');
-        if (images.length > 0) {
-          await uploadMedia(saved.id, images, 'image', !hasExistingImages);
-        }
+        if (images.length > 0) await uploadMedia(saved.id, images, 'image', !hasExistingImages);
         if (videos.length > 0) await uploadMedia(saved.id, videos, 'video', false);
       }
-
       clearPendingFiles();
       setShowForm(false);
-      await loadData();
+      queryClient.invalidateQueries({ queryKey: ['myPosts'] }); // refresh list
     } catch (e) {
       setError(e.message || 'Failed to save.');
     } finally {
@@ -245,29 +259,26 @@ export default function Dashboard() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     if (!window.confirm('Delete this post?')) return;
-    await deletePost(id);
-    setPosts((prev) => prev.filter((p) => p.id !== id));
+    deletePostMutation.mutate(id);
   };
 
   const handleDeleteMedia = async (post, mediaId) => {
     await deleteMedia(post.id, mediaId);
+    // Update the editingPost preview locally without a full refetch
     setEditingPost((prev) => {
       if (!prev || prev.id !== post.id) return prev;
       return { ...prev, media: (prev.media || []).filter((m) => m.id !== mediaId) };
     });
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === post.id ? { ...p, media: (p.media || []).filter((m) => m.id !== mediaId) } : p
-      )
-    );
+    queryClient.invalidateQueries({ queryKey: ['myPosts'] });
   };
 
-  const handleToggleAvailable = async (post) => {
-    const updated = await updatePost(post.id, { is_available: !post.is_available });
-    setPosts((prev) => prev.map((p) => p.id === updated.id ? { ...p, is_available: updated.is_available } : p));
+  const handleToggleAvailable = (post) => {
+    toggleAvailableMutation.mutate({ id: post.id, is_available: !post.is_available });
   };
+
+  // ── Order form handlers ───────────────────────────────────
 
   const resetOrderCustomerSearch = () => {
     setSelectedCustomer(null);
@@ -328,31 +339,20 @@ export default function Dashboard() {
   };
 
   const addSizingRow = () => {
-    setOrderForm((f) => ({
-      ...f,
-      sizingRows: [...f.sizingRows, { label: '', value: '' }],
-    }));
+    setOrderForm((f) => ({ ...f, sizingRows: [...f.sizingRows, { label: '', value: '' }] }));
   };
 
   const removeSizingRow = (index) => {
     setOrderForm((f) => ({
       ...f,
-      sizingRows: f.sizingRows.length > 1
-        ? f.sizingRows.filter((_, i) => i !== index)
-        : f.sizingRows,
+      sizingRows: f.sizingRows.length > 1 ? f.sizingRows.filter((_, i) => i !== index) : f.sizingRows,
     }));
   };
 
   const handleSaveOrder = async () => {
     const guestName = orderForm.guestName.trim();
-    if (!selectedCustomer && !guestName) {
-      setOrderError('Select a customer or enter a name only.');
-      return;
-    }
-    if (!orderForm.postId) {
-      setOrderError('Please select a product.');
-      return;
-    }
+    if (!selectedCustomer && !guestName) { setOrderError('Select a customer or enter a name only.'); return; }
+    if (!orderForm.postId) { setOrderError('Please select a product.'); return; }
     setOrderSaving(true);
     setOrderError('');
     try {
@@ -372,8 +372,7 @@ export default function Dashboard() {
         await createOrder(payload);
       }
       setShowOrderForm(false);
-      const data = await getOrders();
-      setOrders(Array.isArray(data) ? data : data.results || []);
+      queryClient.invalidateQueries({ queryKey: ['orders'] }); // refresh list
     } catch (e) {
       setOrderError(e.message || 'Failed to save order.');
     } finally {
@@ -381,40 +380,26 @@ export default function Dashboard() {
     }
   };
 
-  const handleDeleteOrder = async (id) => {
+  const handleDeleteOrder = (id) => {
     if (!window.confirm('Delete this order?')) return;
-    await deleteOrder(id);
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    deleteOrderMutation.mutate(id);
   };
 
   const stats = {
     total: posts.length,
-    available: posts.filter(p => p.is_available).length,
-    sold: posts.filter(p => !p.is_available).length,
+    available: posts.filter((p) => p.is_available).length,
+    sold: posts.filter((p) => !p.is_available).length,
   };
+
+  // ── JSX (completely unchanged) ────────────────────────────
 
   return (
     <div className="dash">
-      {/* Sidebar */}
       <aside className="dash__sidebar">
-        <div className="dash__brand">
-          <FarishWordmark size="sidebar" />
-        </div>
+        <div className="dash__brand"><FarishWordmark size="sidebar" /></div>
         <nav className="dash__nav">
-          <button
-            type="button"
-            className={`dash__nav-item${activeTab === 'collection' ? ' active' : ''}`}
-            onClick={() => setActiveTab('collection')}
-          >
-            My Collection
-          </button>
-          <button
-            type="button"
-            className={`dash__nav-item${activeTab === 'orders' ? ' active' : ''}`}
-            onClick={() => setActiveTab('orders')}
-          >
-            Order
-          </button>
+          <button type="button" className={`dash__nav-item${activeTab === 'collection' ? ' active' : ''}`} onClick={() => setActiveTab('collection')}>My Collection</button>
+          <button type="button" className={`dash__nav-item${activeTab === 'orders' ? ' active' : ''}`} onClick={() => setActiveTab('orders')}>Order</button>
         </nav>
         <div className="dash__user">
           <span>{user?.username}</span>
@@ -422,18 +407,13 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="dash__main">
         {activeTab === 'collection' && (
           <>
             <div className="dash__header">
-              <div>
-                <h1>My Collection</h1>
-                <p>Manage your designer pieces</p>
-              </div>
+              <div><h1>My Collection</h1><p>Manage your designer pieces</p></div>
               <button className="dash__add-btn" onClick={openNew}>+ New Post</button>
             </div>
-
             <div className="dash__stats">
               {[['Total', stats.total], ['Available', stats.available], ['Sold', stats.sold]].map(([label, val]) => (
                 <div key={label} className="dash__stat">
@@ -442,7 +422,6 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-
             {loading ? (
               <div className="dash__loading">Loading…</div>
             ) : (
@@ -450,10 +429,7 @@ export default function Dashboard() {
                 {posts.map((post) => (
                   <div key={post.id} className="dash__post-row">
                     <div className="dash__post-thumb">
-                      {post.cover_image
-                        ? <img src={post.cover_image} alt={post.title} />
-                        : <div className="dash__post-thumb-empty">No image</div>
-                      }
+                      {post.cover_image ? <img src={post.cover_image} alt={post.title} /> : <div className="dash__post-thumb-empty">No image</div>}
                     </div>
                     <div className="dash__post-info">
                       <h3>{post.title}</h3>
@@ -464,10 +440,7 @@ export default function Dashboard() {
                       </p>
                     </div>
                     <div className="dash__post-actions">
-                      <button
-                        className={`dash__toggle ${post.is_available ? 'available' : 'sold'}`}
-                        onClick={() => handleToggleAvailable(post)}
-                      >
+                      <button className={`dash__toggle ${post.is_available ? 'available' : 'sold'}`} onClick={() => handleToggleAvailable(post)}>
                         {post.is_available ? 'Available' : 'Discontinued'}
                       </button>
                       <button className="dash__edit-btn" onClick={() => openEdit(post)}>Edit</button>
@@ -475,9 +448,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-                {posts.length === 0 && (
-                  <div className="dash__empty">No posts yet. Create your first one!</div>
-                )}
+                {posts.length === 0 && <div className="dash__empty">No posts yet. Create your first one!</div>}
               </div>
             )}
           </>
@@ -486,66 +457,45 @@ export default function Dashboard() {
         {activeTab === 'orders' && (
           <>
             <div className="dash__header">
-              <div>
-                <h1>Order</h1>
-                <p>Customer, product, address, and measurements</p>
-              </div>
+              <div><h1>Order</h1><p>Customer, product, address, and measurements</p></div>
               <button className="dash__add-btn" onClick={openNewOrder}>+ New Order</button>
             </div>
-
             {ordersLoading ? (
               <div className="dash__loading">Loading…</div>
             ) : (
               <div className="dash__orders">
                 <div className="dash__orders-head dash__orders-head--wide">
-                  <span>Customer</span>
-                  <span>Product</span>
-                  <span>Price</span>
-                  <span>Advance</span>
-                  <span>Address</span>
-                  <span>Status</span>
+                  <span>Customer</span><span>Product</span><span>Price</span>
+                  <span>Advance</span><span>Address</span><span>Status</span>
                   <span className="dash__orders-head-actions">Actions</span>
                 </div>
                 {orders.map((order) => (
-                  <div key={order.id} className="dash__order-row dash__order-row--wide" onClick={() => openEditOrder(order)} style={{cursor: 'pointer'}}>
+                  <div key={order.id} className="dash__order-row dash__order-row--wide" onClick={() => openEditOrder(order)} style={{ cursor: 'pointer' }}>
                     <div className="dash__order-cell">
                       <strong>{order.customer_name || '—'}</strong>
                       {order.customer_phone && <span className="dash__order-sub">{order.customer_phone}</span>}
                     </div>
                     <div className="dash__order-cell dash__order-cell--name">
                       <strong>{order.product_name || order.post_title || '—'}</strong>
-                      {formatSizingSummary(order.custom_sizing) && (
-                        <span className="dash__order-sub">{formatSizingSummary(order.custom_sizing)}</span>
-                      )}
+                      {formatSizingSummary(order.custom_sizing) && <span className="dash__order-sub">{formatSizingSummary(order.custom_sizing)}</span>}
                     </div>
-                    <div className="dash__order-cell">
-                      {formatMoney(order.custom_price) || <span className="dash__order-empty">—</span>}
-                    </div>
-                    <div className="dash__order-cell">
-                      {formatMoney(order.advance_payment) || <span className="dash__order-empty">—</span>}
-                    </div>
-                    <div className="dash__order-cell">
-                      {order.address ? order.address : <span className="dash__order-empty">—</span>}
-                    </div>
-                    <div className="dash__order-cell">
-                      <span className={`dash__status-badge dash__status-${order.status}`}>{order.status}</span>
-                    </div>
+                    <div className="dash__order-cell">{formatMoney(order.custom_price) || <span className="dash__order-empty">—</span>}</div>
+                    <div className="dash__order-cell">{formatMoney(order.advance_payment) || <span className="dash__order-empty">—</span>}</div>
+                    <div className="dash__order-cell">{order.address || <span className="dash__order-empty">—</span>}</div>
+                    <div className="dash__order-cell"><span className={`dash__status-badge dash__status-${order.status}`}>{order.status}</span></div>
                     <div className="dash__order-actions">
                       <button type="button" className="dash__edit-btn" onClick={(e) => { e.stopPropagation(); openEditOrder(order); }}>Edit</button>
                       <button type="button" className="dash__del-btn" onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}>Delete</button>
                     </div>
                   </div>
                 ))}
-                {orders.length === 0 && (
-                  <div className="dash__empty">No orders yet. Create one with customer, product, and sizing.</div>
-                )}
+                {orders.length === 0 && <div className="dash__empty">No orders yet. Create one with customer, product, and sizing.</div>}
               </div>
             )}
           </>
         )}
       </main>
 
-      {/* Modal Form */}
       {showForm && (
         <div className="dash__modal-bg" onClick={() => { clearPendingFiles(); setShowForm(false); }}>
           <div className="dash__modal" onClick={(e) => e.stopPropagation()}>
@@ -553,88 +503,59 @@ export default function Dashboard() {
               <h2>{editingPost ? 'Edit Post' : 'New Post'}</h2>
               <button type="button" className="dash__modal-close" onClick={() => { clearPendingFiles(); setShowForm(false); }}>×</button>
             </div>
-
             {error && <div className="dash__error">{error}</div>}
-
             <div className="dash__form">
               <label>Title *
                 <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Silk Embroidered Kurti" />
               </label>
-
               <label>Description
                 <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} placeholder="Fabric, size, details…" />
               </label>
-
               <div className="dash__form-row">
                 <label>Price (৳)
                   <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0" />
                 </label>
                 <label>Category
-                  <input
-                    list="dash-category-list"
-                    value={form.categoryName}
-                    onChange={(e) => setForm((f) => ({ ...f, categoryName: e.target.value }))}
-                    placeholder="Pick or type a category"
-                  />
+                  <input list="dash-category-list" value={form.categoryName} onChange={(e) => setForm((f) => ({ ...f, categoryName: e.target.value }))} placeholder="Pick or type a category" />
                   <datalist id="dash-category-list">
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name} />
-                    ))}
+                    {categories.map((c) => <option key={c.id} value={c.name} />)}
                   </datalist>
                   <span className="dash__file-hint">Choose from suggestions or type a new name.</span>
                 </label>
               </div>
-
               <label className="dash__checkbox">
                 <input type="checkbox" checked={form.is_available} onChange={e => setForm(f => ({ ...f, is_available: e.target.checked }))} />
                 Available for sale
               </label>
-
               <div className="dash__media-section">
                 <p className="dash__media-section-title">Photos & videos</p>
-
-{editingPost && editingPost.media?.length > 0 && (
-                   <div className="dash__existing-media">
-                     <p className="dash__file-hint">Current uploads</p>
-                   <div className="dash__media-grid">
-                     {editingPost.media.map(m => (
-                       <div key={m.id} className="dash__media-thumb">
-                         {m.media_type === 'image'
-                           ? <img src={m.file_url} alt="" onClick={() => setZoomImage(m.file_url)} style={{cursor: 'zoom-in'}} />
-                           : <div className="dash__media-video-icon">▶</div>
-                         }
-                         <button type="button" onClick={() => handleDeleteMedia(editingPost, m.id)} title="Remove">×</button>
-                       </div>
-                     ))}
-                   </div>
-                   </div>
-                 )}
-
+                {editingPost && editingPost.media?.length > 0 && (
+                  <div className="dash__existing-media">
+                    <p className="dash__file-hint">Current uploads</p>
+                    <div className="dash__media-grid">
+                      {editingPost.media.map(m => (
+                        <div key={m.id} className="dash__media-thumb">
+                          {m.media_type === 'image'
+                            ? <img src={m.file_url} alt="" onClick={() => setZoomImage(m.file_url)} style={{ cursor: 'zoom-in' }} />
+                            : <div className="dash__media-video-icon">▶</div>
+                          }
+                          <button type="button" onClick={() => handleDeleteMedia(editingPost, m.id)} title="Remove">×</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <label className="dash__upload-btn">
                   <span>{editingPost ? '+ Add more photos / videos' : '+ Upload photos / videos'}</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,video/*"
-                    onChange={(e) => {
-                      addPendingFiles(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
+                  <input type="file" multiple accept="image/*,video/*" onChange={(e) => { addPendingFiles(e.target.files); e.target.value = ''; }} />
                 </label>
-
                 {pendingFiles.length > 0 && (
                   <div className="dash__pending-media">
-                    <p className="dash__file-hint">
-                      {pendingFiles.length} new file(s) — saved when you click Save Post
-                    </p>
+                    <p className="dash__file-hint">{pendingFiles.length} new file(s) — saved when you click Save Post</p>
                     <div className="dash__media-grid">
                       {pendingFiles.map((file, i) => (
                         <div key={`${file.name}-${i}`} className="dash__media-thumb">
-                          {pendingPreviews[i]
-                            ? <img src={pendingPreviews[i]} alt="" />
-                            : <div className="dash__media-video-icon">▶</div>
-                          }
+                          {pendingPreviews[i] ? <img src={pendingPreviews[i]} alt="" /> : <div className="dash__media-video-icon">▶</div>}
                           <button type="button" onClick={() => removePendingFile(i)} title="Remove">×</button>
                         </div>
                       ))}
@@ -643,12 +564,9 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-
             <div className="dash__modal-footer">
               <button type="button" className="dash__cancel-btn" onClick={() => { clearPendingFiles(); setShowForm(false); }}>Cancel</button>
-              <button className="dash__save-btn" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Save Post'}
-              </button>
+              <button className="dash__save-btn" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Post'}</button>
             </div>
           </div>
         </div>
@@ -661,9 +579,7 @@ export default function Dashboard() {
               <h2>{editingOrder ? 'Edit Order' : 'New Order'}</h2>
               <button type="button" className="dash__modal-close" onClick={() => setShowOrderForm(false)}>✕</button>
             </div>
-
             {orderError && <div className="dash__error">{orderError}</div>}
-
             <div className="dash__form">
               <label>Customer *
                 {selectedCustomer ? (
@@ -677,26 +593,13 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="dash__customer-search">
-                    <input
-                      value={customerSearchQuery}
-                      onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                      placeholder="Search by name, phone, or email…"
-                      autoComplete="off"
-                    />
+                    <input value={customerSearchQuery} onChange={(e) => setCustomerSearchQuery(e.target.value)} placeholder="Search by name, phone, or email…" autoComplete="off" />
                     {customerSearchLoading && <p className="dash__file-hint">Searching…</p>}
                     {customerResults.length > 0 && (
                       <ul className="dash__customer-results">
                         {customerResults.map((c) => (
                           <li key={c.id}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCustomer(c);
-                                setCustomerSearchQuery('');
-                                setCustomerResults([]);
-                                setOrderForm((f) => ({ ...f, guestName: '' }));
-                              }}
-                            >
+                            <button type="button" onClick={() => { setSelectedCustomer(c); setCustomerSearchQuery(''); setCustomerResults([]); setOrderForm((f) => ({ ...f, guestName: '' })); }}>
                               <strong>{c.full_name}</strong>
                               <span>{c.email}</span>
                               {c.phone && <span>{c.phone}</span>}
@@ -710,140 +613,72 @@ export default function Dashboard() {
                     )}
                     <div className="dash__guest-name">
                       <span className="dash__file-hint">Or name only (if not in system)</span>
-                      <input
-                        value={orderForm.guestName}
-                        onChange={(e) => setOrderForm((f) => ({ ...f, guestName: e.target.value }))}
-                        placeholder="e.g. Ayesha Khan"
-                      />
+                      <input value={orderForm.guestName} onChange={(e) => setOrderForm((f) => ({ ...f, guestName: e.target.value }))} placeholder="e.g. Ayesha Khan" />
                     </div>
                   </div>
                 )}
               </label>
-
               <label>Product *
-                <select
-                  value={orderForm.postId}
-                  onChange={(e) => setOrderForm((f) => ({ ...f, postId: e.target.value }))}
-                >
+                <select value={orderForm.postId} onChange={(e) => setOrderForm((f) => ({ ...f, postId: e.target.value }))}>
                   <option value="">— Select product —</option>
                   {productChoices.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}{p.price ? ` — ৳${Number(p.price).toLocaleString()}` : ''}
-                    </option>
+                    <option key={p.id} value={p.id}>{p.title}{p.price ? ` — ৳${Number(p.price).toLocaleString()}` : ''}</option>
                   ))}
                 </select>
               </label>
-
               <div className="dash__form-row">
                 <label>Custom price (৳)
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={orderForm.customPrice}
-                    onChange={(e) => setOrderForm((f) => ({ ...f, customPrice: e.target.value }))}
-                    placeholder="Order total (optional)"
-                  />
+                  <input type="number" min="0" step="1" value={orderForm.customPrice} onChange={(e) => setOrderForm((f) => ({ ...f, customPrice: e.target.value }))} placeholder="Order total (optional)" />
                 </label>
                 <label>Advance payment (৳)
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={orderForm.advancePayment}
-                    onChange={(e) => setOrderForm((f) => ({ ...f, advancePayment: e.target.value }))}
-                    placeholder="Amount paid (optional)"
-                  />
+                  <input type="number" min="0" step="1" value={orderForm.advancePayment} onChange={(e) => setOrderForm((f) => ({ ...f, advancePayment: e.target.value }))} placeholder="Amount paid (optional)" />
                 </label>
               </div>
-
               <label>Address
-                <textarea
-                  value={orderForm.address}
-                  onChange={(e) => setOrderForm((f) => ({ ...f, address: e.target.value }))}
-                  rows={3}
-                  placeholder="Delivery / billing address"
-                />
+                <textarea value={orderForm.address} onChange={(e) => setOrderForm((f) => ({ ...f, address: e.target.value }))} rows={3} placeholder="Delivery / billing address" />
               </label>
-
               <label>Status
-                <select
-                  value={orderForm.status}
-                  onChange={(e) => setOrderForm((f) => ({ ...f, status: e.target.value }))}
-                >
+                <select value={orderForm.status} onChange={(e) => setOrderForm((f) => ({ ...f, status: e.target.value }))}>
                   <option value="preparing">Preparing</option>
                   <option value="delivering">Delivering</option>
                   <option value="delivered">Delivered</option>
                 </select>
               </label>
-
               <div className="dash__sizing-block">
                 <div className="dash__sizing-header">
                   <span>Custom sizing</span>
                   <button type="button" className="dash__edit-btn" onClick={addSizingRow}>+ Add row</button>
                 </div>
                 <table className="dash__sizing-table">
-                  <thead>
-                    <tr>
-                      <th>Measurement</th>
-                      <th>Value</th>
-                      <th aria-label="Actions" />
-                    </tr>
-                  </thead>
+                  <thead><tr><th>Measurement</th><th>Value</th><th aria-label="Actions" /></tr></thead>
                   <tbody>
                     {orderForm.sizingRows.map((row, index) => (
                       <tr key={`sizing-${index}`}>
-                        <td>
-                          <input
-                            value={row.label}
-                            onChange={(e) => updateSizingRow(index, 'label', e.target.value)}
-                            placeholder="e.g. Height"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            value={row.value}
-                            onChange={(e) => updateSizingRow(index, 'value', e.target.value)}
-                            placeholder="e.g. 5 ft 6 in"
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="dash__del-btn"
-                            onClick={() => removeSizingRow(index)}
-                            disabled={orderForm.sizingRows.length <= 1}
-                            title="Remove row"
-                          >
-                            ×
-                          </button>
-                        </td>
+                        <td><input value={row.label} onChange={(e) => updateSizingRow(index, 'label', e.target.value)} placeholder="e.g. Height" /></td>
+                        <td><input value={row.value} onChange={(e) => updateSizingRow(index, 'value', e.target.value)} placeholder="e.g. 5 ft 6 in" /></td>
+                        <td><button type="button" className="dash__del-btn" onClick={() => removeSizingRow(index)} disabled={orderForm.sizingRows.length <= 1} title="Remove row">×</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-
             <div className="dash__modal-footer">
               <button type="button" className="dash__cancel-btn" onClick={() => setShowOrderForm(false)}>Cancel</button>
-              <button type="button" className="dash__save-btn" onClick={handleSaveOrder} disabled={orderSaving}>
-                {orderSaving ? 'Saving…' : 'Save Order'}
-              </button>
+              <button type="button" className="dash__save-btn" onClick={handleSaveOrder} disabled={orderSaving}>{orderSaving ? 'Saving…' : 'Save Order'}</button>
             </div>
           </div>
-</div>
-       )}
+        </div>
+      )}
 
-       {/* Zoom Modal */}
-       {zoomImage && (
-         <div className="dash__modal-bg" onClick={() => setZoomImage(null)}>
-           <div className="dash__modal" style={{maxWidth: '90vw'}} onClick={(e) => e.stopPropagation()}>
-             <button type="button" className="dash__modal-close" onClick={() => setZoomImage(null)}>✕</button>
-             <img src={zoomImage} alt="Full size" style={{width: '100%', height: 'auto', maxHeight: '80vh', objectFit: 'contain', cursor: 'zoom-out'}} onClick={() => setZoomImage(null)} />
-           </div>
-         </div>
-       )}
+      {zoomImage && (
+        <div className="dash__modal-bg" onClick={() => setZoomImage(null)}>
+          <div className="dash__modal" style={{ maxWidth: '90vw' }} onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="dash__modal-close" onClick={() => setZoomImage(null)}>✕</button>
+            <img src={zoomImage} alt="Full size" style={{ width: '100%', height: 'auto', maxHeight: '80vh', objectFit: 'contain', cursor: 'zoom-out' }} onClick={() => setZoomImage(null)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

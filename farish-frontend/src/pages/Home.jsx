@@ -1,5 +1,6 @@
 // src/pages/Home.jsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { getPosts, getCategories } from '../services/api';
 import PostCard from '../components/PostCard';
 import FarishWordmark from '../components/FarishWordmark';
@@ -8,65 +9,61 @@ import '../styles/Home.css';
 
 export default function Home() {
   const { user } = useAuth();
-  const [posts, setPosts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const loaderRef = useRef(null);
   const searchTimer = useRef(null);
 
-  const fetchPosts = useCallback(async (reset = false) => {
-    setLoading(true);
-    try {
-      const currentPage = reset ? 1 : page;
-      const data = await getPosts({ page: currentPage, search, category: activeCategory });
-      if (reset) {
-        setPosts(data.results || data);
-        setPage(2);
-      } else {
-        setPosts((prev) => [...prev, ...(data.results || [])]);
-        setPage((p) => p + 1);
-      }
-      setHasMore(!!(data.next));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, activeCategory]);
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: getCategories,
+    staleTime: 1000 * 60 * 10,
+    select: (data) => Array.isArray(data) ? data : data.results || [],
+  });
 
-  useEffect(() => {
-    getCategories().then(data => {
-  setCategories(Array.isArray(data) ? data : data.results || []);
-}).catch(console.error);
-  }, []);
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['posts', search, activeCategory, user?.id],
+    queryFn: ({ pageParam = 1 }) =>
+      getPosts({ page: pageParam, search, category: activeCategory }),
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.next) return undefined;
+      const url = new URL(lastPage.next);
+      return url.searchParams.get('page');
+    },
+    staleTime: 1000 * 60 * 2,
+  });
 
-  useEffect(() => {
-    fetchPosts(true);
-  }, [search, activeCategory, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  const posts = data?.pages.flatMap((page) => page.results || page) ?? [];
 
-  // Infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting && hasMore && !loading) fetchPosts(); },
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
       { threshold: 0.5 }
     );
     const el = loaderRef.current;
     if (el) observer.observe(el);
     return () => el && observer.unobserve(el);
-  }, [hasMore, loading, fetchPosts]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleSearch = (e) => {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setSearch(e.target.value), 400);
   };
 
+  const loading = isLoading || isFetchingNextPage;
+
   return (
     <div className="home">
-      {/* Hero strip */}
       <div className="home__hero">
         <span className="home__hero-label">Curated fashion</span>
         <div className="home__hero-wordmark">
@@ -75,7 +72,6 @@ export default function Home() {
         <p className="home__hero-sub">Browse pieces freely — log in to send a WhatsApp enquiry.</p>
       </div>
 
-      {/* Sticky filters */}
       <div className="home__filters">
         <div className="home__search-wrap">
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -102,26 +98,24 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Feed grid */}
       <div className="home__grid">
         {posts.map((post, i) => (
           <PostCard key={post.id} post={post} index={i} />
         ))}
       </div>
 
-      {/* Loader sentinel */}
       <div ref={loaderRef} className="home__loader">
         {loading && (
           <div className="home__spinner">
             <span/><span/><span/>
           </div>
         )}
-        {!hasMore && posts.length > 0 && (
+        {!hasNextPage && posts.length > 0 && (
           <p className="home__end">— end of collection —</p>
         )}
       </div>
 
-      {!loading && posts.length === 0 && (
+      {!isLoading && posts.length === 0 && (
         <div className="home__empty">
           <p>No pieces found.</p>
         </div>
